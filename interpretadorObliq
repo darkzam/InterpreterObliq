@@ -1,0 +1,75 @@
+#lang racket
+
+
+(define especificacion-lexica
+  '(
+    (espacio (whitespace) skip)
+    (comentario ("//" (arbno (not #\newline))) skip)
+    (identificador (letter (arbno (or letter digit "_" "?"))) symbol)
+    (caracter ("'" (or letter digit) "'" ) string)
+    (cadena ("\"" (arbno (or letter digit)) "\"" ) string)
+    (numero ((or digit (concat "-" digit)) (arbno digit)) string)
+    )
+  )
+
+(define especificacion-gramatical
+  '(
+    (programa  (expresion) un-programa)
+    ;;Expresiones constantes
+    (expresion (numero) numero-exp)
+    (expresion ("true") true-exp)
+    (expresion ("false") false-exp)
+    (expresion (texto) texto-exp)
+    ;; Variables. Estas son globales para todo el código
+    (expresion (cadena) cadena-exp) ;;Consulta de variable
+    (expresion ("var" variable "=" expresion) variableCreacion-exp) ;;Creacion de variable, no tiene retorno
+    (expresion ("set" variable "=" expresion) variableAsignacion-exp) ;;Asignacion de variable, no tiene retorno
+    ;; Listas
+    (expresion ("{" expresion (arbno expresion) "}") lista-exp)
+    ;;Vectore
+    (expresion ("#" "{" expresion (arbno expresion) "}") vector-exp)
+    ;;Funciones (el primer argumento es el nombre de la función, los siguientes los argumentos, se retorna el último valor de la expresion
+    (expresion ("fun" "(" variable (arbno variable) ")" expresion (arbno expresion) "end") fun-exp) ;;Crea una función y la asigna directamente a una variable
+    (expresion ("proc" "(" (arbno variable) ")" expresion (arbno expresion) "end") proc-exp) ;;Retorna un valor procedimiento, es necesario asignarlo a una variable
+    ;;Invoacion de funciones/procedmientos
+    (expresion ("(" variable  (arbno expresion) ")") app-exp)
+    ;;Locales (crea las variables y retorna un valor)
+    (expresion ("local"
+                   "("
+                        ;;Zona de creación de variables locales
+                        "("
+                        (arbno variable "=" expresion)
+                        ")"
+                        ;;Zona de expresiones (siempre retorna la última)"
+                        "("
+                        expresion (arbno expresion)
+                        ")"
+                     ")"
+                  )
+               local-exp)
+    ;; Condicionales
+    (expresion ("if" expresion "?" expresion ":" expresion) if-exp)
+    (expresion ("cond" (arbno "[" expresion expresion "]") "else" expresion) cond-exp)
+    ;;Primitivas
+    ;(expresion (primitive "(" expresion (arbno "," expresion) ")") primitiva-exp)
+    ;Como el uso de primitiva requiere 2 o mas argumentos por facilidad se agruparon todos los parametros en una sola lista
+    (expresion (primitive "(" (separated-list expresion ",")")") prim-exp)
+   ;; Operaciones aritméticas
+    (primitive ("+") sum-prim)
+    (primitive ("-") sub-prim)
+    (primitive ("*") mul-prim)
+    (primitive ("/") div-prim)
+    ;; Comparación
+    (primitive ("<")  menor-prim)
+    (primitive ("=<") menig-prim)
+    (primitive (">")  mayor-prim)
+    (primitive (">=") mayig-prim)
+    (primitive ("==") igual-prim)
+    ;; Listas y vectores
+    (primitive ("size") size-prim) ;;Retorna el tamaño de la lista
+    (primitive ("nth") nth-prim) ;; Retorna el n-esimo elemento de a lista (se cuenta desde 1 hasta n)
+    ;; Vector
+    (primitive ("agregar") add-vector-prim) ;;Agrega un elemento a un vector
+    (primitive ("delete") del-vector-prim) ;;Borrar un elemento de un vector
+    )
+  )
