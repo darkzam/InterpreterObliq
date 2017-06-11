@@ -39,6 +39,24 @@
     (bool-expresion ("false") false-exp)
     (bool-expresion (bool-primitiva "("(separated-list expresion "," ) ")" ) bool-prim-exp) ;aplica un operador primitivo booleano a unas expresiones
     (bool-expresion (bool-oper "(" (separated-list bool-expresion "," ) ")" ) bool-oper-expr) ;aplica un operador booleano diferente a los default a unas expresiones
+    ;;procedimientos
+    (expresion ("proc" "(" (separated-list identificador ",") ")" expresion "end") proc-exp)
+    ;;apply
+    (expresion ("apply" identificador "(" (separated-list expresion ",") ")") apply-exp)
+    ;;methodos
+    (expresion ("meth" "(" identificador "," (separated-list identificador ",") ")" expresion "end") meth-exp)
+    ;;for
+    (expresion ("for" identificador "=" expresion "to" expresion "do" expresion "end") for-exp)
+    ;;object
+    (expresion ("object" "{" (separated-list identificador "=>" expresion ",") "}") obj-exp)
+    ;;get
+    (expresion ("get" identificador "." identificador) get-exp)
+    ;;send
+    (expresion ("send" identificador "." identificador "(" (separated-list identificador ",") ")") send-exp)
+    ;;update
+    (expresion ("update" identificador "." identificador ":=" expresion ) update-exp)
+    ;;clone
+    (expresion ("clone" "(" identificador (separated-list identificador ",") ")" ) clone-exp)  
     ;;Primitivas
    ;;primitvas aritmeticas
     (primitiva ("+") add-prim)
@@ -46,6 +64,8 @@
     (primitiva ("*") mult-prim)
     (primitiva ("%") modul-prim)
     (primitiva ("/") div-prim)
+    ;;primitiva concatenar
+    (primitive ("&") concat-prim)
      ;;primitvas booleanas
     (bool-primitiva ("<") menor-bool-prim)
     (bool-primitiva (">") mayor-bool-prim)
@@ -56,13 +76,6 @@
     (bool-oper ("not") not-oper)
     (bool-oper ("and") and-oper)
     (bool-oper ("or") or-oper)
-    ;; Listas y vectores
-    (primitive ("size") size-prim) ;;Retorna el tamaño de la lista
-    (primitive ("nth") nth-prim) ;; Retorna el n-esimo elemento de a lista (se cuenta desde 1 hasta n)
-    ;; Vector
-    (primitive ("agregar") add-vector-prim) ;;Agrega un elemento a un vector
-    (primitive ("delete") del-vector-prim) ;;Borrar un elemento de un vector
-    )
   )
 
 
@@ -81,6 +94,15 @@
 
 ;(prueba "let rec a(x,y,z)=4 in g end")
 ;(prueba "let in g end")
-;(prueba "let rec a(x,y,z)=4 , b(x,y,z)=g in +(a,b) end")
+;(prueba "let rec factorial(x,y,z)=4 , b(x,y,z)=g in +(a,b) end")
 ;(prueba "if false then b elseif false then g else g end")
 ;;(prueba "if >(a,b) then b elseif false then g else g end")
+;;(prueba "proc (a,b,c,d,f,f,g) +(a b c e) end")
+;;(prueba "apply funcion() ")
+;;(prueba "apply funcion(a,v,b,f,g,h,h) ")
+;; (prueba "meth(s,) s end")
+;;(prueba "meth(s,ab,c,f) s end")
+;;(prueba "object {}")
+;;(prueba "object {m=>g, h=>j, k=> l}")
+;; (prueba "clone(s0)")
+;;(prueba "send a.m(h,h,h,h,h,h,h)")
