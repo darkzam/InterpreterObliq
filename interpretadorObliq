@@ -1,4 +1,4 @@
-#lang racket
+#lang eopl
 
 
 (define especificacion-lexica
@@ -17,36 +17,15 @@
     (programa  (expresion) un-programa)
     ;;Expresiones constantes
     (expresion (numero) numero-exp)
-    (expresion ("true") true-exp)
-    (expresion ("false") false-exp)
-    (expresion (texto) texto-exp)
-    ;; Variables. Estas son globales para todo el código
-    (expresion (cadena) cadena-exp) ;;Consulta de variable
-    (expresion ("var" variable "=" expresion) variableCreacion-exp) ;;Creacion de variable, no tiene retorno
-    (expresion ("set" variable "=" expresion) variableAsignacion-exp) ;;Asignacion de variable, no tiene retorno
-    ;; Listas
-    (expresion ("{" expresion (arbno expresion) "}") lista-exp)
-    ;;Vectore
-    (expresion ("#" "{" expresion (arbno expresion) "}") vector-exp)
-    ;;Funciones (el primer argumento es el nombre de la función, los siguientes los argumentos, se retorna el último valor de la expresion
-    (expresion ("fun" "(" variable (arbno variable) ")" expresion (arbno expresion) "end") fun-exp) ;;Crea una función y la asigna directamente a una variable
-    (expresion ("proc" "(" (arbno variable) ")" expresion (arbno expresion) "end") proc-exp) ;;Retorna un valor procedimiento, es necesario asignarlo a una variable
-    ;;Invoacion de funciones/procedmientos
-    (expresion ("(" variable  (arbno expresion) ")") app-exp)
-    ;;Locales (crea las variables y retorna un valor)
-    (expresion ("local"
-                   "("
-                        ;;Zona de creación de variables locales
-                        "("
-                        (arbno variable "=" expresion)
-                        ")"
-                        ;;Zona de expresiones (siempre retorna la última)"
-                        "("
-                        expresion (arbno expresion)
-                        ")"
-                     ")"
-                  )
-               local-exp)
+    (expresion (caracter) caracter-exp)
+    (expresion (cadena) cadena-exp)
+    (expresion ("ok") ok-exp)
+    ;; Variables. 
+    (expresion (identificador) id-exp) ;;Consulta de variable
+    (expresion ("var" (separated-list identificador "=" expresion ",") "in" expresion "end" ) var-exp)
+    (expresion ("let" (separated-list identificador "=" expresion ",") "in" expresion "end") let-exp)
+    (expresion ("let rec" (separated-list identificador "(" (separated-list identificador ",") ")" "=" expresion ",") "in" expresion "end") letrec-exp)
+    (expresion ("set" identificador ":=" expresion ) set-exp)
     ;; Condicionales
     (expresion ("if" expresion "?" expresion ":" expresion) if-exp)
     (expresion ("cond" (arbno "[" expresion expresion "]") "else" expresion) cond-exp)
@@ -73,3 +52,21 @@
     (primitive ("delete") del-vector-prim) ;;Borrar un elemento de un vector
     )
   )
+
+
+;;Definir datatypes
+(sllgen:make-define-datatypes especificacion-lexica especificacion-gramatical)
+
+;;Mostrar Datatyoes
+(define show-the-datatypes
+  (lambda () (sllgen:list-define-datatypes especificacion-lexica especificacion-gramatical)))
+
+;;Escaner
+(define just-scan (sllgen:make-string-scanner especificacion-lexica especificacion-gramatical))
+
+;;Parse
+(define prueba (sllgen:make-string-parser especificacion-lexica especificacion-gramatical))
+
+;(prueba "let rec a(x,y,z)=4 in g end")
+;(prueba "let in g end")
+;(prueba "let rec a(x,y,z)=4 , b(x,y,z)=g in +(a,b) end")
