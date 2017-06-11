@@ -20,30 +20,42 @@
     (expresion (caracter) caracter-exp)
     (expresion (cadena) cadena-exp)
     (expresion ("ok") ok-exp)
+  ;  (expresion (bool-expresion) bool-exp)
     ;; Variables. 
     (expresion (identificador) id-exp) ;;Consulta de variable
     (expresion ("var" (separated-list identificador "=" expresion ",") "in" expresion "end" ) var-exp)
     (expresion ("let" (separated-list identificador "=" expresion ",") "in" expresion "end") let-exp)
     (expresion ("let rec" (separated-list identificador "(" (separated-list identificador ",") ")" "=" expresion ",") "in" expresion "end") letrec-exp)
+    ;;seteo de variable
     (expresion ("set" identificador ":=" expresion ) set-exp)
+    ;;ejecucion secuencial
+    (expresion ("begin" expresion (arbno ";" expresion) "end") begin-exp)
+    ;;primitiva expresion
+    (expresion (primitiva "(" (arbno expresion) ")" ) prim-exp)
     ;; Condicionales
-    (expresion ("if" expresion "?" expresion ":" expresion) if-exp)
-    (expresion ("cond" (arbno "[" expresion expresion "]") "else" expresion) cond-exp)
+    (expresion ("if" bool-expresion "then" expresion (arbno "elseif" bool-expresion "then" expresion)"else" expresion "end") if-exp)
+    ;;expresiones booleanas
+    (bool-expresion ("true") true-exp)
+    (bool-expresion ("false") false-exp)
+    (bool-expresion (bool-primitiva "("(separated-list expresion "," ) ")" ) bool-prim-exp) ;aplica un operador primitivo booleano a unas expresiones
+    (bool-expresion (bool-oper "(" (separated-list bool-expresion "," ) ")" ) bool-oper-expr) ;aplica un operador booleano diferente a los default a unas expresiones
     ;;Primitivas
-    ;(expresion (primitive "(" expresion (arbno "," expresion) ")") primitiva-exp)
-    ;Como el uso de primitiva requiere 2 o mas argumentos por facilidad se agruparon todos los parametros en una sola lista
-    (expresion (primitive "(" (separated-list expresion ",")")") prim-exp)
-   ;; Operaciones aritméticas
-    (primitive ("+") sum-prim)
-    (primitive ("-") sub-prim)
-    (primitive ("*") mul-prim)
-    (primitive ("/") div-prim)
-    ;; Comparación
-    (primitive ("<")  menor-prim)
-    (primitive ("=<") menig-prim)
-    (primitive (">")  mayor-prim)
-    (primitive (">=") mayig-prim)
-    (primitive ("==") igual-prim)
+   ;;primitvas aritmeticas
+    (primitiva ("+") add-prim)
+    (primitiva ("-") substract-prim)
+    (primitiva ("*") mult-prim)
+    (primitiva ("%") modul-prim)
+    (primitiva ("/") div-prim)
+     ;;primitvas booleanas
+    (bool-primitiva ("<") menor-bool-prim)
+    (bool-primitiva (">") mayor-bool-prim)
+    (bool-primitiva ("<=") menorig-bool-prim)
+    (bool-primitiva (">=") mayorig-bool-prim)
+    (bool-primitiva ("is") igual-bool-prim)
+    ;;Operacion booleana
+    (bool-oper ("not") not-oper)
+    (bool-oper ("and") and-oper)
+    (bool-oper ("or") or-oper)
     ;; Listas y vectores
     (primitive ("size") size-prim) ;;Retorna el tamaño de la lista
     (primitive ("nth") nth-prim) ;; Retorna el n-esimo elemento de a lista (se cuenta desde 1 hasta n)
@@ -70,3 +82,5 @@
 ;(prueba "let rec a(x,y,z)=4 in g end")
 ;(prueba "let in g end")
 ;(prueba "let rec a(x,y,z)=4 , b(x,y,z)=g in +(a,b) end")
+;(prueba "if false then b elseif false then g else g end")
+;;(prueba "if >(a,b) then b elseif false then g else g end")
