@@ -38,7 +38,7 @@
     (bool-expresion ("true") true-exp)
     (bool-expresion ("false") false-exp)
     (bool-expresion (bool-primitiva "("(separated-list expresion "," ) ")" ) bool-prim-exp) ;aplica un operador primitivo booleano a unas expresiones
-    (bool-expresion (bool-oper "(" (separated-list bool-expresion "," ) ")" ) bool-oper-expr) ;aplica un operador booleano diferente a los default a unas expresiones
+    (bool-expresion (bool-oper "(" (separated-list bool-expresion "," ) ")" ) bool-oper-exp) ;aplica un operador booleano diferente a los default a unas expresiones
     ;;procedimientos
     (expresion ("proc" "(" (separated-list identificador ",") ")" expresion "end") proc-exp)
     ;;apply
@@ -78,6 +78,8 @@
     (bool-oper ("or") or-oper)
   ))
 
+;;------------------------------------------------------------------------------------------------
+;;funciones de libreria
 
 ;;Definir datatypes
 (sllgen:make-define-datatypes especificacion-lexica especificacion-gramatical)
@@ -91,6 +93,246 @@
 
 ;;Parse
 (define prueba (sllgen:make-string-parser especificacion-lexica especificacion-gramatical))
+
+;;-------------------------------------------------------------------------------------------------
+;;Procedimientos
+
+(define-datatype procval procval?
+  (closure
+   (ids (list-of symbol?))
+   (body expresion?)
+   (env environment?)))
+
+;apply-procedure: evalua el cuerpo de un procedimientos en el ambiente extendido correspondiente
+(define apply-procedure
+  (lambda (proc args)
+    (cases procval proc
+      (closure (ids body env)
+               (eval-expression body (extend-env ids args env))))))
+
+;;-------------------------------------------------------------------------------------------------
+;;Referencias
+
+(define-datatype reference reference?
+  (a-ref (position integer?)
+         (vec vector?)))
+
+(define deref
+  (lambda (ref)
+    (primitive-deref ref)))
+
+(define primitive-deref
+  (lambda (ref)
+    (cases reference ref
+      (a-ref (pos vec)
+             (vector-ref vec pos)))))
+
+(define setref!
+  (lambda (ref val)
+    (primitive-setref! ref val)))
+
+(define primitive-setref!
+  (lambda (ref val)
+    (cases reference ref
+      (a-ref (pos vec)
+             (vector-set! vec pos val)))))
+
+
+;;-------------------------------------------------------------------------------------------------
+;Definicion Ambientes
+;definición del tipo de dato ambiente
+
+(define-datatype environment environment?
+  (empty-env-record)
+  (extended-env-record
+   (syms (list-of symbol?))
+   (vec vector?)
+   (env environment?)))
+
+(define scheme-value? (lambda (v) #t))
+
+;empty-env:      -> enviroment
+;función que crea un ambiente vacío
+(define empty-env  
+  (lambda ()
+    (empty-env-record)))       ;llamado al constructor de ambiente vacío 
+
+
+;extend-env: <list-of symbols> <list-of numbers> enviroment -> enviroment
+;función que crea un ambiente extendido
+(define extend-env
+  (lambda (syms vals env)
+    (extended-env-record syms (list->vector vals) env)))
+
+;extend-env-recursively: <list-of symbols> <list-of <list-of symbols>> <list-of expressions> environment -> environment
+;función que crea un ambiente extendido para procedimientos recursivos
+(define extend-env-recursively
+  (lambda (proc-names idss bodies old-env)
+    (let ((len (length proc-names)))
+      (let ((vec (make-vector len)))
+        (let ((env (extended-env-record proc-names vec old-env)))
+          (for-each
+            (lambda (pos ids body)
+              (vector-set! vec pos (closure ids body env)))
+            (iota len) idss bodies)
+          env)))))
+
+;iota: number -> list
+;función que retorna una lista de los números desde 0 hasta end
+(define iota
+  (lambda (end)
+    (let loop ((next 0))
+      (if (>= next end) '()
+        (cons next (loop (+ 1 next)))))))
+
+;(define iota
+;  (lambda (end)
+;    (iota-aux 0 end)))
+;
+;(define iota-aux
+;  (lambda (ini fin)
+;    (if (>= ini fin)
+;        ()
+;        (cons ini (iota-aux (+ 1 ini) fin)))))
+
+;función que busca un símbolo en un ambiente
+(define apply-env
+  (lambda (env sym)
+    (deref (apply-env-ref env sym))))
+
+(define apply-env-ref
+  (lambda (env sym)
+    (cases environment env
+      (empty-env-record ()
+                        (eopl:error 'apply-env-ref "No binding for ~s" sym))
+      (extended-env-record (syms vals env)
+                           (let ((pos (rib-find-position sym syms)))
+                             (if (number? pos)
+                                 (a-ref pos vals)
+                                 (apply-env-ref env sym)))))))
+
+;;-------------------------------------------------------------------------------------------------------------------------
+;;Ambiente Inicial
+
+(define init-env(lambda()
+                  (empty-env
+                   )))
+
+;;-------------------------------------------------------------------------------------------------------------------------
+;El Interpretador (FrontEnd + Evaluación + señal para lectura )
+
+(define interpretador
+  (sllgen:make-rep-loop  "--> "
+    (lambda (pgm) (eval-program  pgm)) 
+    (sllgen:make-stream-parser 
+      especificacion-lexica
+      especificacion-gramatical)))
+
+;eval-program: <programa> -> numero
+; función que evalúa un programa teniendo en cuenta un ambiente dado (se inicializa dentro del programa)
+
+(define eval-program
+  (lambda (pgm)
+    (cases programa pgm
+      (un-programa (body)
+                 (eval-expression body (init-env))))))
+
+;;Evaluacion de la expresion
+;;eval-expression: <expression> <enviroment> -> numero
+
+(define eval-expression
+  (lambda (exp env)
+    (cond
+      [(expresion? exp)
+       (cases expresion exp
+      ;;Evaluacion de las constantes
+      ;numero-exp evaluacion
+      (numero-exp (number) number)
+      ;caracter-exp evaluacion
+      (caracter-exp (caracter) caracter)
+      ;cadena-exp
+      (cadena-exp (texto) texto)
+      ;ok-exp
+      (ok-exp () "ok")
+      ;;Evaluacion de las variables
+      ;;id-exp evaluacion se busca el id en el ambiente (puede ser un valor o un objeto o un procedimiento)
+      (id-exp (id) (apply-env env id))
+      ;;var-exp evaluacion se crean las variables(modificables) con sus valores, a continuacion se valua el cuerpo donde tienen relevancia
+      (var-exp (ids expresiones cuerpo) (list ids expresiones cuerpo))
+      ;;let-exp evaluacion se crean las ligadauras(no modificables) con sus valores, a continuacion se valua el cuerpo donde tienen relevancia
+      (let-exp (ids expresiones cuerpo) (list ids expresiones cuerpo) )
+      ;letrec-exp evaluacion
+      (letrec-exp (names params bodies mbody ) (list names params bodies mbody))
+      ;set-exp evaluacion
+      (set-exp (id expresion ) (list id expresion))
+      ;begin-exp evaluacion
+      (begin-exp (exp exps) "begin")
+      ;prim-exp evaluacion
+      (prim-exp (prim expresiones) "primitiva expresiones")
+      ;if-exp evaluacoin
+      (if-exp (bexp truexp bexps trueExps falseexp ) "if")
+      ;;Procedimientos
+      ;proc-exp evaluacion
+      (proc-exp (args body) "proc")
+      ;apply-exp evaluacion
+      (apply-exp (name args) "apply-exp")
+      ;meth-exp evlauacion
+      (meth-exp (self args body) "llamada metodo")
+      ;for-exp evaluacion
+      (for-exp (contador expini expfin body) "for")
+      ;obj-exp evaluacion
+      (obj-exp (fields exps) "objeto")
+      ;get-exp evaluacion
+      (get-exp (name field) "get campo de objeto")
+      ;send-exp evaluacion
+      (send-exp (nobj method args) "llamada a methodo de objeto")
+      ;update-exp evaluaion
+      (update-exp (nobj field exp) "update field")
+      ;clone-exp evaluacion
+      (clone-exp (obj objs) "clonar objeto's")
+         )]
+      [(bool-expresion? exp)
+       (cases bool-expresion exp
+      ;;Expresiones boolenas
+      ;true-exp
+      (true-exp () #t)
+      ;false-exp
+      (false-exp () #f)
+      ;bool-prim-exp evaluacion
+      (bool-prim-exp (prim args ) "bool prim")
+      ;bool-oper-exp evaluacoin
+      (bool-oper-exp (operador args) "bool op")
+         )]
+          ))) 
+
+
+;;----------------------------------------------------------------------------------------------------------------
+
+;Funciones Auxiliares
+
+; funciones auxiliares para encontrar la posición de un símbolo
+; en la lista de símbolos de un ambiente
+
+(define rib-find-position 
+  (lambda (sym los)
+    (list-find-position sym los)))
+
+(define list-find-position
+  (lambda (sym los)
+    (list-index (lambda (sym1) (eqv? sym1 sym)) los)))
+
+(define list-index
+  (lambda (pred ls)
+    (cond
+      ((null? ls) #f)
+      ((pred (car ls)) 0)
+      (else (let ((list-index-r (list-index pred (cdr ls))))
+              (if (number? list-index-r)
+                (+ list-index-r 1)
+                #f))))))
+
+;;----------------------------------------------------------------------------------------------------------------
+;;Pruebas de gramatica
 
 ;(prueba "let rec a(x,y,z)=4 in g end")
 ;(prueba "let in g end")
