@@ -183,7 +183,7 @@
   (lambda (proc-names idss bodies old-env)
     (let ((len (length proc-names)))
       (let ((vec (make-vector len)))
-        (let ((env (extended-env-record proc-names vec old-env)))
+        (let ((env (extended-env-record-cons proc-names vec old-env))) ;;la coleccion de procedimientos es no actualizable por tanto el ambiente creado es constante
           (for-each
             (lambda (pos ids body)
               (vector-set! vec pos (closure ids body env)))
@@ -284,7 +284,8 @@
                  (eval-expression cuerpo
                                   (extend-env-cons ids args env))));;se crea el ambiente extendido ligadura constante
       ;letrec-exp evaluacion
-      (letrec-exp (names params bodies mbody ) (list names params bodies mbody))
+      (letrec-exp (proc-names idss bodies letrec-body ) (eval-expression letrec-body
+                                   (extend-env-recursively proc-names idss bodies env)))
       ;set-exp evaluacion
       (set-exp (id expresion ) (eval-set-exp id expresion env))
       ;begin-exp evaluacion
@@ -301,13 +302,18 @@
       (if-exp (bexp truexp bexps trueExps falseexp ) (eval-if bexp truexp bexps trueExps falseexp env))
       ;;Procedimientos
       ;proc-exp evaluacion
-      (proc-exp (args body) "proc")
+      (proc-exp (ids body) (closure ids body env))
       ;apply-exp evaluacion
-      (apply-exp (name args) "apply-exp")
+      (apply-exp (rator rands) (let ((proc (eval-expression rator env))
+                     (args (eval-rands rands env)))
+                 (if (procval? proc)
+                     (apply-procedure proc args)
+                     (eopl:error 'eval-expression
+                                 "Attempt to apply non-procedure ~s" proc))))
       ;meth-exp evlauacion
       (meth-exp (self args body) "llamada metodo")
-      ;for-exp evaluacion
-      (for-exp (contador expini expfin body) "for")
+     ;for-exp evaluacion
+     (for-exp (contador expini expfin body) (eval-for contador expini expfin body env))
       ;obj-exp evaluacion
       (obj-exp (fields exps) "objeto")
       ;get-exp evaluacion
@@ -365,7 +371,7 @@
 (define eval-set-exp(lambda(id expresion env)
                       ;;verificar primero que tipo de ambiente: constante(con ligaduras que permiten modificacion) o variable(ligaduras modificables) 
                (cases environment env
-                 (empty-env-record () (eopl:error "Error las variables no existen el ambiente esta vacio") )
+                 (empty-env-record () (eopl:error "Error no puede modificarse una ligadura constante"))
                  (extended-env-record (ids vals padre) (let((refer (apply-env-ref env id) ))
                                                          (cases reference refer
                                                            (a-ref (pos vec escons) (if escons
@@ -381,6 +387,26 @@
                  (extended-env-record-cons (ids vals padre) (eval-set-exp id expresion padre))
                 )
                  ))
+
+;;evalfor y ejecutarfor:
+
+(define eval-for 
+  (lambda (contador expini expfin body env)
+     (ejecutar-for (eval-expression expini env) (eval-expression expfin env) body (extended-env-record '(contador) (vector (eval-expression expini env)) env))
+     ;(ejecutar-for (eval-expression expini env) (eval-expression expfin env) body env)  
+    ))
+
+(define ejecutar-for 
+  (lambda (from to body env)
+    (cond
+      [(< from to)(eval-expression body env)]
+      )
+    (cond
+      [(= from to) (eval-expression body env)]
+      [(< from to)  (ejecutar-for (+ from 1) to body env)]          
+      )   
+    )
+  )
 
 ;;----------------------------------------------------------------------------------------------------------------
 ;;Aplicar primitivas
@@ -541,3 +567,7 @@
 ;let a=20, b=30 in begin set a:=50; +(a b) end end   debe lanzar error no se puede setear nada en un ambiente constante
 ;let a=10, b=5 in var c=7, d=+(a b) in +(d c) end end
 ;var c=7, d=20 in let a=20 in begin set d:=10; +(d a) end end end
+;let rec suma(x,y)=+(x y) in apply suma(2,3) end
+; proc(x,y) +(x y) end
+;let rec suma(x,y)=+(x y) in apply suma(2,3) end
+;var a=20, c=40 in begin for x = 0 to 3 do set a:=+(a 1) end; a  end end
