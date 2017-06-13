@@ -1,5 +1,8 @@
 #lang eopl
 
+;ZAMIR NARVAEZ 1423275
+;ANDRES MARTINEZ 1710064
+;DIEGO BOTERO 1430959
 
 (define especificacion-lexica
   '(
