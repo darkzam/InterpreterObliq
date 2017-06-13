@@ -4,7 +4,7 @@
 (define especificacion-lexica
   '(
     (espacio (whitespace) skip)
-    (comentario ("//" (arbno (not #\newline))) skip)
+    (comentario ("(*" (arbno (not #\newline)) "*)") skip)
     (identificador (letter (arbno (or letter digit "_" "?"))) symbol)
     (caracter ("'" (or letter digit) "'" ) string)
     (cadena ("\"" (arbno (or letter digit)) "\"" ) string)
@@ -20,7 +20,7 @@
     (expresion (caracter) caracter-exp)
     (expresion (cadena) cadena-exp)
     (expresion ("ok") ok-exp)
-  ;  (expresion (bool-expresion) bool-exp)
+    (expresion (bool-expresion) bool-exp)
     ;; Variables. 
     (expresion (identificador) id-exp) ;;Consulta de variable
     (expresion ("var" (separated-list identificador "=" expresion ",") "in" expresion "end" ) var-exp)
@@ -65,7 +65,7 @@
     (primitiva ("%") modul-prim)
     (primitiva ("/") div-prim)
     ;;primitiva concatenar
-    (primitive ("&") concat-prim)
+    (primitiva ("&") concat-prim)
      ;;primitvas booleanas
     (bool-primitiva ("<") menor-bool-prim)
     (bool-primitiva (">") mayor-bool-prim)
@@ -242,8 +242,6 @@
 
 (define eval-expression
   (lambda (exp env)
-    (cond
-      [(expresion? exp)
        (cases expresion exp
       ;;Evaluacion de las constantes
       ;numero-exp evaluacion
@@ -253,7 +251,9 @@
       ;cadena-exp
       (cadena-exp (texto) texto)
       ;ok-exp
-      (ok-exp () "ok")
+      (ok-exp () (ok-exp))
+      ;;bool-exp evaluacin
+      (bool-exp (boolexpresion) (eval-boolexp boolexpresion) )
       ;;Evaluacion de las variables
       ;;id-exp evaluacion se busca el id en el ambiente (puede ser un valor o un objeto o un procedimiento)
       (id-exp (id) (apply-env env id))
@@ -268,7 +268,7 @@
       ;begin-exp evaluacion
       (begin-exp (exp exps) "begin")
       ;prim-exp evaluacion
-      (prim-exp (prim expresiones) "primitiva expresiones")
+      (prim-exp (prim expresiones) (apply-primitiva prim expresiones env))
       ;if-exp evaluacoin
       (if-exp (bexp truexp bexps trueExps falseexp ) "if")
       ;;Procedimientos
@@ -290,21 +290,91 @@
       (update-exp (nobj field exp) "update field")
       ;clone-exp evaluacion
       (clone-exp (obj objs) "clonar objeto's")
-         )]
-      [(bool-expresion? exp)
-       (cases bool-expresion exp
-      ;;Expresiones boolenas
-      ;true-exp
-      (true-exp () #t)
-      ;false-exp
-      (false-exp () #f)
-      ;bool-prim-exp evaluacion
-      (bool-prim-exp (prim args ) "bool prim")
-      ;bool-oper-exp evaluacoin
-      (bool-oper-exp (operador args) "bool op")
-         )]
-          ))) 
+         )
+          )) 
 
+(define eval-boolexp(lambda(boolexp)
+                      (cases bool-expresion boolexp
+                        ;;Expresiones boolenas
+                        ;true-exp
+                        (true-exp () #t)
+                        ;false-exp
+                        (false-exp () #f)
+                        ;bool-prim-exp evaluacion
+                        (bool-prim-exp (prim args ) "bool prim")
+                        ;bool-oper-exp evaluacoin
+                        (bool-oper-exp (operador args) "bool op")
+         )))
+
+;;----------------------------------------------------------------------------------------------------------------
+;;Aplicar primitivas
+
+;;APLICACION
+(define apply-primitiva
+  (lambda (prim args env)
+    (cond
+      [(primitiva? prim)
+      (cases primitiva prim
+       (add-prim () (calularPrimitiva args + 0 env))
+        (substract-prim () (calularPrimitiva args - 0 env))
+        (mult-prim () (calularPrimitiva args * 1 env))
+        (div-prim () (calularPrimitiva args + 0 env))
+        ;;sacar el modulo 
+        (modul-prim () (calularPrimitiva args modulo 1 env))
+        ;;primitiva que concatena dos cadenas con se aplica string -append a dos cadenas de texto tipo string (si son numeros se convierte)
+        (concat-prim () (calularPrimitiva args string-append "" env))
+        )]
+      ;;primitivas booleanas
+      [(bool-primitiva? prim)
+           (cases bool-primitiva prim
+             (menor-bool-prim () (< (eval-expression (car args) env) (eval-expression (cadr args) env)))
+             (mayor-bool-prim () (> (eval-expression (car args) env) (eval-expression (cadr args) env)))
+             (menorig-bool-prim () (<= (eval-expression (car args) env) (eval-expression (cadr args) env)))      
+             (mayorig-bool-prim () (>= (eval-expression (car args) env) (eval-expression (cadr args) env)))
+             (igual-bool-prim () (= (eval-expression (car args) env) (eval-expression (cadr args) env)))
+             )]
+      ;;operadores booleanos
+      [(bool-oper? prim)
+       (cases bool-oper prim
+         ;;En el caso del not, si es una lista con mas de una expresion, solo evalua la primera 
+         (not-oper () (not (eval-expression (car args) env)))
+         (and-oper () (operarAnd args env))
+         (or-oper () (operarOr args env))
+         )]
+          )))
+
+;;----------------------------------------------------------------------------------------------------------------
+;;Funciones auxiliares de primitivas
+;;Esta función opera la lista de acuerdo a la operacion que se desea hacer
+(define calularPrimitiva
+  (lambda (lista operacion terminacion amb)
+    (cond
+      [(null? lista) terminacion]
+      [else
+       (operacion
+        (eval-expression (car lista) amb)
+        (calularPrimitiva (cdr lista) operacion terminacion amb))
+       ]
+      )
+    )
+  )
+
+;;retornar el valor haciendo And con todos los elementos enviados
+;;si un elemento es false, todo es falso
+(define operarAnd(lambda(booleanos ambiente)
+                   (cond [(null? booleanos) (true-exp)]
+                         [(not eval-expression(car booleanos) ambiente) (false-exp)]
+                         [else (operarAnd (cdr booleanos) ambiente)]
+                          )
+                   ))
+;;retornar el valor haciendo or con todos los elementos enviados
+;;si un elemento es verdadero, todo es verdadero
+(define operarOr(lambda(booleanos ambiente)
+                     (cond [(null? booleanos) (false-exp)]
+                         [(eval-expression(car booleanos) ambiente) (true-exp)]
+                         [else (operarOr (cdr booleanos) ambiente)]
+                          )
+                   ))
 
 ;;----------------------------------------------------------------------------------------------------------------
 
