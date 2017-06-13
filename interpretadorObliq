@@ -115,7 +115,8 @@
 
 (define-datatype reference reference?
   (a-ref (position integer?)
-         (vec vector?)))
+         (vec vector?)
+         (escons boolean?)))
 
 (define deref
   (lambda (ref)
@@ -124,7 +125,7 @@
 (define primitive-deref
   (lambda (ref)
     (cases reference ref
-      (a-ref (pos vec)
+      (a-ref (pos vec escons)
              (vector-ref vec pos)))))
 
 (define setref!
@@ -134,7 +135,7 @@
 (define primitive-setref!
   (lambda (ref val)
     (cases reference ref
-      (a-ref (pos vec)
+      (a-ref (pos vec escons)
              (vector-set! vec pos val)))))
 
 
@@ -144,10 +145,17 @@
 
 (define-datatype environment environment?
   (empty-env-record)
-  (extended-env-record
+  (extended-env-record ;;ambiente extendido con ligaduras variables
    (syms (list-of symbol?))
    (vec vector?)
-   (env environment?)))
+   (env environment?)
+   )
+  (extended-env-record-cons ;;ambiente extendido con ligaduras constantes
+   (syms (list-of symbol?))
+   (vec vector?)
+   (env environment?)
+   )
+  )
 
 (define scheme-value? (lambda (v) #t))
 
@@ -163,6 +171,11 @@
 (define extend-env
   (lambda (syms vals env)
     (extended-env-record syms (list->vector vals) env)))
+
+;;funcion genera ambiente extendido con ligaduras constantes
+(define extend-env-cons
+  (lambda (syms vals env)
+    (extended-env-record-cons syms (list->vector vals) env)))
 
 ;extend-env-recursively: <list-of symbols> <list-of <list-of symbols>> <list-of expressions> environment -> environment
 ;función que crea un ambiente extendido para procedimientos recursivos
@@ -208,7 +221,12 @@
       (extended-env-record (syms vals env)
                            (let ((pos (rib-find-position sym syms)))
                              (if (number? pos)
-                                 (a-ref pos vals)
+                                 (a-ref pos vals #f) ;una referencia modificable
+                                 (apply-env-ref env sym))))
+      (extended-env-record-cons (syms vals env)
+                           (let ((pos (rib-find-position sym syms)))
+                             (if (number? pos)
+                                 (a-ref pos vals #t) ;una referencia no modificable
                                  (apply-env-ref env sym)))))))
 
 ;;-------------------------------------------------------------------------------------------------------------------------
@@ -260,17 +278,15 @@
       ;;var-exp evaluacion se crean las variables(modificables) con sus valores, a continuacion se valua el cuerpo donde tienen relevancia
       (var-exp (ids rands cuerpo) (let ((args (eval-rands rands env)))
                  (eval-expression cuerpo
-                                  (extend-env ids args env))))
+                                  (extend-env ids args env))));;se crea el ambiente extendido con ligadura variable
       ;;let-exp evaluacion se crean las ligadauras(no modificables) con sus valores, a continuacion se valua el cuerpo donde tienen relevancia
-      (let-exp (ids expresiones cuerpo) (list ids expresiones cuerpo) )
+      (let-exp (ids rands cuerpo) (let ((args (eval-rands rands env)))
+                 (eval-expression cuerpo
+                                  (extend-env-cons ids args env))));;se crea el ambiente extendido ligadura constante
       ;letrec-exp evaluacion
       (letrec-exp (names params bodies mbody ) (list names params bodies mbody))
       ;set-exp evaluacion
-      (set-exp (id expresion ) (begin
-                 (setref!
-                  (apply-env-ref env id)
-                  (eval-expression expresion env))
-                 1))
+      (set-exp (id expresion ) (eval-set-exp id expresion env))
       ;begin-exp evaluacion
       (begin-exp (exp exps)  (let loop ((acc (eval-expression exp env))
                              (exps exps))
@@ -343,6 +359,28 @@
        )
     )
   )
+
+;;---- Evaluar set-exp
+
+(define eval-set-exp(lambda(id expresion env)
+                      ;;verificar primero que tipo de ambiente: constante(con ligaduras que permiten modificacion) o variable(ligaduras modificables) 
+               (cases environment env
+                 (empty-env-record () (eopl:error "Error las variables no existen el ambiente esta vacio") )
+                 (extended-env-record (ids vals padre) (let((refer (apply-env-ref env id) ))
+                                                         (cases reference refer
+                                                           (a-ref (pos vec escons) (if escons
+                                                                               (eopl:error "Error no puede modificarse una ligadura constante")
+                                                                                (begin
+                                                                                  (setref!
+                                                                                   (apply-env-ref env id)
+                                                                                   (eval-expression expresion env))
+                                                                                  (ok-exp))))
+                                                           )
+                                                         ) 
+                )
+                 (extended-env-record-cons (ids vals padre) (eval-set-exp id expresion padre))
+                )
+                 ))
 
 ;;----------------------------------------------------------------------------------------------------------------
 ;;Aplicar primitivas
@@ -500,3 +538,6 @@
 ;var a=10, b=5 in var c=7, d=+(a b) in begin set a:=-999; set b:=-2; +(a b) end end end
 ;if and(false,true) then 5 elseif false then 7 elseif true then 8 else 4 end
 ;if is(9,0) then 5 elseif false then 7 elseif true then 8 else 4 end
+;let a=20, b=30 in begin set a:=50; +(a b) end end   debe lanzar error no se puede setear nada en un ambiente constante
+;let a=10, b=5 in var c=7, d=+(a b) in +(d c) end end
+;var c=7, d=20 in let a=20 in begin set d:=10; +(d a) end end end
