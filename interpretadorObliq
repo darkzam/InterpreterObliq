@@ -282,7 +282,7 @@
       ;prim-exp evaluacion
       (prim-exp (prim expresiones) (apply-primitiva prim expresiones env))
       ;if-exp evaluacoin
-      (if-exp (bexp truexp bexps trueExps falseexp ) "if")
+      (if-exp (bexp truexp bexps trueExps falseexp ) (eval-if bexp truexp bexps trueExps falseexp env))
       ;;Procedimientos
       ;proc-exp evaluacion
       (proc-exp (args body) "proc")
@@ -317,6 +317,32 @@
                         ;bool-oper-exp evaluacoin
                         (bool-oper-exp (operador args) (apply-primitiva operador args env))
          )))
+
+;;----------------- EVALUAR IF
+
+(define eval-if
+  (lambda (bexp truexp bexps trueExps falseexp ambiente)
+     (cond
+       ;;si la primer condicion es verdadera entonces evaluamos la expresion verdadera "trueexp"
+        [(eqv? #t (eval-boolexp bexp ambiente)) (eval-expression truexp ambiente)]
+       ;; si no entonces, llamo a la funcion eval-if-sub  
+        [else (eval-if-sub bexps trueExps falseexp ambiente)]
+       )
+    )
+  )
+
+;; esta funcion me va a recorrer toda la lista de expresiones booleanas
+;; cuando una de estas expresiones sea verdadera entonces retorna la evaluacion de la expresion
+;; pero si se terminan las espresiones entonces retorna la evaluacion de la expresion else "falseexp" 
+(define eval-if-sub
+  (lambda (bexps trueExps falseexp ambiente)
+     (cond
+        [(null? bexps)  (eval-expression falseexp ambiente)]
+        [(eqv? #t (eval-boolexp (car bexps) ambiente)) (eval-expression (car trueExps) ambiente)]
+        [else (eval-if-sub (cdr bexps) (cdr trueExps) falseexp ambiente)]
+       )
+    )
+  )
 
 ;;----------------------------------------------------------------------------------------------------------------
 ;;Aplicar primitivas
@@ -469,3 +495,8 @@
 
 ;var a=20, c=40 in begin set a:=30; *(a 10)end end
 ;var a=20, c=40 in begin set a:=30; set c:=2; *(a c)end end
+;var a=10, b=5 in var c=7, d=+(a b) in +(d c) end end
+;var a=10, b=5 in var c=7, d=+(a b) in begin set a:=-999; set b:=-2; +(d c) end end end
+;var a=10, b=5 in var c=7, d=+(a b) in begin set a:=-999; set b:=-2; +(a b) end end end
+;if and(false,true) then 5 elseif false then 7 elseif true then 8 else 4 end
+;if is(9,0) then 5 elseif false then 7 elseif true then 8 else 4 end
