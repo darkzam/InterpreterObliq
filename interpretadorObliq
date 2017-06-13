@@ -249,7 +249,7 @@
       ;caracter-exp evaluacion
       (caracter-exp (caracter) caracter)
       ;cadena-exp
-      (cadena-exp (texto) texto)
+      (cadena-exp (texto)  texto "\"")
       ;ok-exp
       (ok-exp () (ok-exp))
       ;;bool-exp evaluacin
@@ -358,9 +358,11 @@
       )
     )
   )
+
 (define operacioncalular
   (lambda (operacion)
     (cond
+      [(eqv? operacion string-append) string-append]
       [(eqv? operacion +) +]
       [(eqv? operacion -) +]
       [(eqv? operacion *) *]
